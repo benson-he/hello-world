@@ -15,7 +15,7 @@ systemctl stop firewalld
 pip3 install shadowsocks
 
 # 3
-server_ip=`ifconfig | awk 'NR==2 {print $2}'`
+server_ip=`ifconfig | grep inet | egrep -v 'inet6|127' | awk '{print $2}'`
 
 cat << EOF > /etc/shadowsocks.json 
 {
