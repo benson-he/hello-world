@@ -10,12 +10,13 @@ EOF
 fi
 # 1
 systemctl stop firewalld
-
+echo "######"
 # 2
 pip3 install shadowsocks
-
+echo "######"
 # 3
 yum install net-tools -y
+echo "######"
 server_ip=`ifconfig | grep inet | egrep -v 'inet6|127' | awk '{print $2}'`
 
 cat << EOF > /etc/shadowsocks.json 
@@ -30,5 +31,6 @@ cat << EOF > /etc/shadowsocks.json
     "fast_open": false
 }
 EOF
+echo "######"
 # 4
 ssserver -c /etc/shadowsocks.json -d start
