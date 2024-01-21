@@ -15,6 +15,7 @@ systemctl stop firewalld
 pip3 install shadowsocks
 
 # 3
+yum install net-tools -y
 server_ip=`ifconfig | grep inet | egrep -v 'inet6|127' | awk '{print $2}'`
 
 cat << EOF > /etc/shadowsocks.json 
