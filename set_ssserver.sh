@@ -15,9 +15,7 @@ echo "######"
 pip3 install shadowsocks
 echo "######"
 # 3
-yum install net-tools -y
-echo "######"
-server_ip=`ifconfig | grep inet | egrep -v 'inet6|127' | awk '{print $2}'`
+server_ip=`ip addr | grep inet | egrep -v 'inet6|127' | awk '{print $2}' | awk -F "/" '{print $1}'`
 
 cat << EOF > /etc/shadowsocks.json 
 {
