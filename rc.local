@@ -1,0 +1,55 @@
+#!/bin/bash
+# THIS FILE IS ADDED FOR COMPATIBILITY PURPOSES
+#
+# It is highly advisable to create own systemd services or udev rules
+# to run scripts during boot instead of using this file.
+#
+# In contrast to previous versions due to parallel execution during boot
+# this script will NOT be run after all other services.
+#
+# Please note that you must run 'chmod +x /etc/rc.d/rc.local' to ensure
+# that this script will be executed during boot.
+
+touch /var/lock/subsys/local
+# 1
+systemctl stop firewalld
+echo "######"
+# 2
+server_ip=`ip addr | grep inet | egrep -v 'inet6|127' | awk '{print $2}' | awk -F "/" '{print $1}'`
+
+cat << EOF > /etc/shadowsocks.json 
+{
+    "server": "$server_ip",
+    "server_port": 9094,
+    "local_address": "127.0.0.1",
+    "local_port": 1080,
+    "password": "MySsPass4!",
+    "timeout": 300,
+    "method": "aes-256-cfb",
+    "fast_open": false
+}
+EOF
+echo "######"
+# 3
+echo > /var/log/shadowsocks.log && ssserver -c /etc/shadowsocks.json -d start
+# 4
+testing=$(head -2 /var/log/shadowsocks.log)
+#echo -e $testing
+
+generate_post_data()
+{
+cat << EOF
+{
+        "channel": "#monitoring-infrastructure",
+        "icon_emoji": ":ghost:",
+        "username": "ss-notice",
+        "blocks": [{"type":"section","text":{"type":"mrkdwn","text":"*_fancy messages:_*$testing"}}]
+}
+EOF
+}
+
+curl -i -H "Accept: application/json" -H "Content-type: application/json" \
+--data "$(generate_post_data)" -X POST https://hooks.slack.com/services/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
+
+# 5
+dd if=/dev/zero of=/root/loopdev bs=1M count=64
