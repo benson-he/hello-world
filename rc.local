@@ -40,16 +40,16 @@ generate_post_data()
 {
 cat << EOF
 {
-        "channel": "#monitoring-infrastructure",
-        "icon_emoji": ":ghost:",
-        "username": "ss-notice",
-        "blocks": [{"type":"section","text":{"type":"mrkdwn","text":"*_fancy messages:_*$testing"}}]
+    "channel": "#monitoring-infrastructure",
+    "icon_emoji": ":ghost:",
+    "username": "ss-notice",
+    "blocks": [{"type": "section", "text":{"type": "mrkdwn", "text":"*_fancy messages:_*$testing"}}]
 }
 EOF
 }
 
 curl -i -H "Accept: application/json" -H "Content-type: application/json" \
---data "$(generate_post_data)" -X POST https://hooks.slack.com/services/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
+    --data "$(generate_post_data)" -X POST https://hooks.slack.com/services/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
 
 # 5
 dd if=/dev/zero of=/root/loopdev bs=1M count=64
