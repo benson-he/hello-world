@@ -12,7 +12,7 @@ fi
 systemctl stop firewalld
 echo "######"
 # 2
-yum install python3 python3-pip
+yum install python3 python3-pip -y
 pip3 install shadowsocks
 echo "######"
 my_python_version=`python -V | awk '{print $2}'`
