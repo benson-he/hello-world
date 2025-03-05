@@ -82,7 +82,7 @@ cat << EOF
 }
 EOF
 }
-curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST https://hooks.slack.com/services/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
+curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
 echo -e "\n######\n"
 dd if=/dev/zero of=/root/loopdev bs=1M count=150
 echo -e "\n"
