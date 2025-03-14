@@ -6,14 +6,11 @@ sleep 1
 # 1
 yum install python3 python3-pip -y 
 pip3 install shadowsocks
-echo -e "\n######\n"
+echo -e "###Install finished###"
 # Get OpenSSL version
 openssl_version=$(openssl version | awk '{print $2}')
 openssl_major=$(echo $openssl_version | cut -d '.' -f 1)
 openssl_minor=$(echo $openssl_version | cut -d '.' -f 2)
-
-# Get Python version (f2: major and minor version)
-my_python_version_f2=$(python3 -V | awk '{print $2}' | cut -d '.' -f -2)
 
 # Check if OpenSSL version is 1.1.x or later
 if [[ "$openssl_major" -gt 1 || ( "$openssl_major" -eq 1 && "$openssl_minor" -ge 1 ) ]]; then
@@ -30,24 +27,57 @@ else
     echo "OpenSSL version is older than 1.1.x ($openssl_version). No changes made."
 fi
 
-# Check if Python version is 3.10.x or later
-python_version=$(python3 --version 2>&1 | awk '{print $2}')
-python_major=$(echo $python_version | cut -d. -f1)
-python_minor=$(echo $python_version | cut -d. -f2)
+# 检查 Python 版本是否 >= 3.10，并更新 shadowsocks 的 lru_cache.py 文件
 
-if [ "$python_major" -ge 3 ] && [ "$python_minor" -ge 10 ]; then
-    echo "Python version is 3.10.x or later, proceeding with update..."
-    lru_cache_py_file="/usr/local/lib/python${my_python_version_f2}/site-packages/shadowsocks/lru_cache.py"
-    
-    # Check if file exists before making changes
+# 获取 Python 版本，处理可能的错误输出
+python_version=$(python3 --version 2>&1)
+if [[ $? -ne 0 ]]; then
+    echo "Error: Failed to get Python version. Is python3 installed?"
+    exit 1
+fi
+
+# 提取主版本号和次版本号，使用更简洁的方式
+python_version=$(echo "$python_version" | awk '{print $2}')
+python_major=${python_version%%.*}  # 提取主版本（如 3）
+python_minor=${python_version#*.}   # 提取次版本和补丁（如 13.2）
+python_minor=${python_minor%%.*}    # 提取次版本（如 13）
+
+# 检查是否 >= 3.10
+if [[ "$python_major" -ge 3 && "$python_minor" -ge 10 ]]; then
+    echo "Python version is $python_version (>= 3.10), proceeding with update..."
+
+    # 动态获取 site-packages 路径，避免硬编码
+    python_ver="$python_major.$python_minor"  # 如 3.13
+    site_packages=$(python3 -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
+    if [[ -z "$site_packages" ]]; then
+        echo "Warning: Could not determine site-packages path, falling back to /usr/local/lib/python$python_ver/site-packages"
+        site_packages="/usr/local/lib/python$python_ver/site-packages"
+    fi
+    lru_cache_py_file="$site_packages/shadowsocks/lru_cache.py"
+
+    # 检查文件是否存在
     if [[ -f "$lru_cache_py_file" ]]; then
-        sed -i 's#collections.MutableMapping#collections.abc.MutableMapping#g' "$lru_cache_py_file"
-        echo "Replaced collections.MutableMapping with collections.abc.MutableMapping in $lru_cache_py_file"
+        # 检查文件是否可写
+        if [[ ! -w "$lru_cache_py_file" ]]; then
+            echo "Error: No write permission for $lru_cache_py_file. Try running with sudo."
+            exit 1
+        fi
+
+        # 执行替换并检查是否成功
+        sed -i 's#collections\.MutableMapping#collections.abc.MutableMapping#g' "$lru_cache_py_file"
+        if [[ $? -eq 0 ]]; then
+            echo "Replaced collections.MutableMapping with collections.abc.MutableMapping in $lru_cache_py_file"
+        else
+            echo "Error: Failed to modify $lru_cache_py_file"
+            exit 1
+        fi
     else
-        echo "Error: File $lru_cache_py_file does not exist."
+        echo "Error: File $lru_cache_py_file does not exist. Is shadowsocks installed?"
+        exit 1
     fi
 else
-    echo "Python version is 3.10.x or later. No changes made."
+    echo "Python version is $python_version (< 3.10). No changes made."
+    exit 0
 fi
 
 # 2
@@ -64,7 +94,7 @@ cat << EOF > /etc/shadowsocks.json
     "fast_open": false
 }
 EOF
-echo -e "\n######\n"
+
 # 3
 ssserver -c /etc/shadowsocks.json -d start
 # 4
@@ -83,6 +113,5 @@ cat << EOF
 EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
-echo -e "\n######\n"
+echo -e "\n######"
 dd if=/dev/zero of=/root/loopdev bs=1M count=150
-echo -e "\n"
