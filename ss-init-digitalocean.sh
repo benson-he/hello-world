@@ -103,8 +103,7 @@ else
     log "Python version is $python_version (< 3.10). No changes made."
 fi
 
-log "Script completed successfully"
-exit 0
+log "Install section completed successfully"
 
 # 2
 server_ip=`curl -s http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address`
@@ -126,7 +125,7 @@ ssserver -c /etc/shadowsocks.json -d start
 # 4
 sleep 2
 testing=$(head -2 /var/log/shadowsocks.log)
-#echo -e $testing
+
 generate_post_data()
 {
 cat << EOF
@@ -141,3 +140,5 @@ EOF
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
 echo -e "\n######"
 dd if=/dev/zero of=/root/loopdev bs=1M count=150
+log "Script completed successfully"
+exit 0
