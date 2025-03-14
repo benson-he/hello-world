@@ -40,8 +40,6 @@ pip3 install shadowsocks || {
 }
 log "### Install section completed ###"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"; }
-
 # 获取 Shadowsocks 的 site-packages 路径
 site_packages=$(pip3 show shadowsocks 2>/dev/null | grep -i "Location:" | awk '{print $2}')
 if [[ -z "$site_packages" || ! -d "$site_packages" ]]; then
