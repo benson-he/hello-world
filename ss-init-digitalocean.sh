@@ -87,7 +87,7 @@ else
     log "OpenSSL version is $openssl_version (< 1.1.x), no changes made"
 fi
 
-log "Fix code section completed"
+log "### Fix code section completed ###"
 
 # 2
 server_ip=`curl -s http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address`
