@@ -101,13 +101,19 @@ fi
 log "### Fix code section completed ###"
 
 # 2
-server_ip=$(curl -s --connect-timeout 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address)
-if [[ -z "$server_ip" || $? -ne 0 ]]; then
+# 获取服务器 IP，设置 5 秒超时
+server_ip=$(curl -s --connect-timeout 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address 2>/dev/null)
+exit_code=$?
+
+# 检查退出状态码和变量是否为空
+if [[ $exit_code -ne 0 || -z "$server_ip" ]]; then
     log "Failed to get server IP (exit code: $exit_code), using default: 0.0.0.0"
-    server_ip='0.0.0.0'
+    server_ip="0.0.0.0"
 else
     log "Server IP retrieved: $server_ip"
 fi
+
+echo "Server IP: $server_ip"
 
 cat << EOF > /etc/shadowsocks.json
 {
