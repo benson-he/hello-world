@@ -115,8 +115,6 @@ else
     log "Server IP retrieved: $server_ip"
 fi
 
-echo "Server IP: $server_ip"
-
 cat << EOF > /etc/shadowsocks.json
 {
     "server": "$server_ip",
