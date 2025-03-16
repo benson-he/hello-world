@@ -62,6 +62,12 @@ if [[ ! -f "$lru_cache_file" ]]; then
     exit 1
 fi
 
+# Ensure "import sys" exists before using sys.version_info
+if ! grep -q "^import sys" "$lru_cache_file"; then
+    sed -i '1i import sys' "$lru_cache_file"
+    log "Added 'import sys' to $lru_cache_file"
+fi
+# Check if the required modification already exists
 if grep -q "if sys.version_info.major == 3 and sys.version_info.minor >= 10" "$lru_cache_file"; then
     log "Modification already exists in $lru_cache_file."
 else
