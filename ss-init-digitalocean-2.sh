@@ -13,6 +13,16 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# 检查环境变量
+if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
+    log "Error: SLACK_WEBHOOK_URL is not set"
+    exit 1
+fi
+if [[ -z "$SSPASSWD" ]]; then
+    log "Error: SSPASSWD is not set"
+    exit 1
+fi
+
 # 设置时区（可选）
 if command_exists timedatectl; then
     timedatectl set-timezone Asia/Shanghai
@@ -102,7 +112,6 @@ fi
 
 log "### Fix code section completed ###"
 
-# 2
 # 获取服务器 IP，设置 5 秒超时
 server_ip=$(curl -s --connect-timeout 5 http://169.254.169.254/metadata/v1/interfaces/public/0/ipv4/address 2>/dev/null)
 exit_code=$?
@@ -128,9 +137,14 @@ cat << EOF > /etc/shadowsocks.json
 }
 EOF
 
-# 3
+# 设置 TCP 拥塞控制算法为 BBR（移到 Shadowsocks 启动之前）
+log "Setting TCP congestion control to BBR"
+modprobe tcp_bbr || log "Warning: Failed to load tcp_bbr module"
+sysctl -w net.ipv4.tcp_congestion_control=bbr || log "Error: Failed to set BBR as TCP congestion control"
+echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf || log "Warning: Failed to persist BBR setting"
+
+# 启动 Shadowsocks 服务
 ssserver -c /etc/shadowsocks.json -d start
-# 4
 sleep 2
 testing=$(head -2 /var/log/shadowsocks.log)
 
@@ -147,6 +161,10 @@ EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
 echo -e "\n######"
-dd if=/dev/zero of=/root/loopdev bs=1M count=150
+
+# 创建测试文件（添加注释说明用途）
+log "Creating a 150MB test file for disk&network I/O testing"
+dd if=/dev/zero of=/root/loopdev bs=1M count=150 2>/dev/null || log "Warning: Failed to create test file"
+
 log "Script completed successfully"
 exit 0
