@@ -72,18 +72,22 @@ if [[ ! -f "$lru_cache_file" ]]; then
     exit 1
 fi
 
-# Check if the required modification already exists
-if grep -q "if sys.version_info.major == 3 and sys.version_info.minor >= 10" "$lru_cache_file"; then
+# Check if patch already applied
+if grep -q "from collections.abc import MutableMapping" "$lru_cache_file"; then
     log "Modification already exists in $lru_cache_file."
 else
+    # Insert compatibility imports after "import collections"
     sed -i '/import collections/a\
 import sys\
-if sys.version_info.major == 3 and sys.version_info.minor >= 10:\
+if sys.version_info >= (3, 10):\
     from collections.abc import MutableMapping\
 else:\
-    from collections import MutableMapping' "$lru_cache_file" && \
-    log "Modification added to $lru_cache_file successfully." || \
-    log "Error: Failed to modify $lru_cache_file"
+    from collections import MutableMapping' "$lru_cache_file"
+
+    # Replace "collections.MutableMapping" with just "MutableMapping"
+    sed -i 's/collections\.MutableMapping/MutableMapping/g' "$lru_cache_file"
+
+    log "Modification added to $lru_cache_file successfully."
 fi
 
 # 检查 OpenSSL 版本并更新 openssl.py
