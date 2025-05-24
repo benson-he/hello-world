@@ -18,6 +18,9 @@ if [[ -z "$SLACK_WEBHOOK_URL" ]]; then
     log "Error: SLACK_WEBHOOK_URL is not set"
     exit 1
 fi
+if [[ -z "$DINGTALK_WEBHOOK_URL" ]]; then
+    log "Warn: DINGTALK_WEBHOOK_URL is not set"
+fi
 if [[ -z "$SSPASSWD" ]]; then
     log "Error: SSPASSWD is not set"
     exit 1
@@ -164,7 +167,21 @@ cat << EOF
 EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
-echo -e "\n######"
+
+echo -e "\nsend a message to dingtalk"
+generate_dingtalk_post_data()
+{
+local message_content="ss-notice: ${testing}" # 确保消息内容中包含关键词
+cat << EOF
+{
+    "msgtype": "text",
+    "text": {
+        "content": "${message_content}"
+    }
+}
+EOF
+}
+curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_dingtalk_post_data)" -X POST ${DINGTALK_WEBHOOK_URL}
 
 # 创建测试文件（添加注释说明用途）
 log "Creating a 150MB test file for disk&network I/O testing"
