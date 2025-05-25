@@ -168,7 +168,7 @@ EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
 
-echo -e "\nsend a message to dingtalk"
+log "send a message to dingtalk"
 generate_dingtalk_post_data()
 {
 local message_content="ss-notice: ${testing}" # 确保消息内容中包含关键词
