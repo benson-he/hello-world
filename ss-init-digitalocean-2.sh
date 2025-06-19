@@ -167,6 +167,7 @@ cat << EOF
 EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_post_data)" -X POST ${SLACK_WEBHOOK_URL}
+echo # <--- 在这里添加一个 echo 命令，确保日志消息换行
 
 log "send a message to dingtalk"
 generate_dingtalk_post_data()
@@ -182,6 +183,7 @@ cat << EOF
 EOF
 }
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_dingtalk_post_data)" -X POST ${DINGTALK_WEBHOOK_URL}
+echo # <--- 在这里添加一个 echo 命令，确保日志消息换行
 
 # 创建测试文件（添加注释说明用途）
 log "Creating a 150MB test file for disk&network I/O testing"
