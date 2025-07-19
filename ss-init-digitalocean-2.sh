@@ -41,12 +41,49 @@ else
     log "Warning: systemctl not found, skipping firewall stop"
 fi
 
-# 安装 Python 和 Shadowsocks
-log "Installing python3 and shadowsocks..."
+# ====================================================================
+# 修正部分：确保 SSH 正常工作
+# ====================================================================
+
+log "Ensuring OpenSSH server is correctly installed and configured..."
+
 if command_exists dnf; then
     # 清理dnf缓存
     dnf clean all || log "Warning: Failed to clean dnf cache"
+
+    # 尝试重新安装 openssh-server 和 openssh-clients
+    # 如果 dnf reinstall 失败 (例如因为 'from anaconda' 导致的包不可用), 则尝试 remove 再 install
+    if ! dnf reinstall -y openssh-server openssh-clients; then
+        log "dnf reinstall failed, attempting to remove and then install openssh-server and openssh-clients..."
+        log "!!! WARNING: SSH access may be temporarily interrupted during this process. !!!"
+        dnf remove -y openssh-server openssh-clients || { log "Error: Failed to remove OpenSSH packages."; exit 1; }
+        dnf install -y openssh-server openssh-clients || { log "Error: Failed to install OpenSSH packages."; exit 1; }
+        log "OpenSSH packages reinstalled."
+    else
+        log "OpenSSH packages reinstalled successfully with dnf reinstall."
+    fi
+
+    # 确保 sshd 服务启动
+    systemctl enable sshd --now || log "Warning: Failed to enable and start sshd service."
+    log "sshd service status after initial setup:"
+    systemctl status sshd || true # true ensures script doesn't exit if status command itself fails
+    sshd -t || log "Warning: sshd configuration test failed after reinstallation."
+
+else
+    log "Warning: No dnf found. OpenSSH check and reinstallation skipped."
+fi
+
+log "### OpenSSH setup completed ###"
+
+# ====================================================================
+# 其他部分继续
+# ====================================================================
+
+# 安装 Python 和 Shadowsocks
+log "Installing python3, pip and other utilities..."
+if command_exists dnf; then
     # 安装必要的包，包括 openssl-libs (dnf会自动处理openssl依赖)
+    # yum-utils 确保在此处安装，以便后续的 needs-restarting 使用
     dnf install -y python3 python3-pip openssl openssl-libs yum-utils || \
     { log "Error: Failed to install python3, python3-pip, openssl, openssl-libs, or yum-utils"; exit 1; }
 elif command_exists apt; then
@@ -105,25 +142,32 @@ fi
 # 检查 OpenSSL 版本并更新 openssl.py
 if command_exists openssl; then
     openssl_version=$(openssl version 2>/dev/null | awk '{print $2}')
+    # Extract major and minor versions. OpenSSL 3.x.y means major=3, minor=x
     openssl_major=$(echo "$openssl_version" | cut -d '.' -f1)
     openssl_minor=$(echo "$openssl_version" | cut -d '.' -f2)
 
+    # Simplified check for OpenSSL 1.1.x and later (including 3.x.x)
+    # The fix is generally for 1.1.0+ where EVP_CIPHER_CTX_cleanup was replaced.
+    # OpenSSL 3.x versions would fall into this >= 1.1 category.
     if [[ "$openssl_major" -gt 1 || ( "$openssl_major" -eq 1 && "$openssl_minor" -ge 1 ) ]]; then
         log "OpenSSL version is $openssl_version (>= 1.1.x), updating openssl.py..."
         openssl_py_file="$site_packages/shadowsocks/crypto/openssl.py"
 
         if [[ -f "$openssl_py_file" ]]; then
+            # Ensure sed handles potential multiple lines or first occurrence.
+            # Use 's/pattern/replacement/g' for global replacement on a line.
+            # Using '\&' to match and replace the found string safely.
             sed -i 's/EVP_CIPHER_CTX_cleanup/EVP_CIPHER_CTX_reset/g' "$openssl_py_file" && \
-                log "Replaced EVP_CIPHER_CTX_cleanup in $openssl_py_file" || \
+                log "Replaced EVP_CIPHER_CTX_cleanup with EVP_CIPHER_CTX_reset in $openssl_py_file" || \
                 log "Error: Failed to modify $openssl_py_file"
         else
             log "Error: $openssl_py_file does not exist"
         fi
     else
-        log "OpenSSL version is $openssl_version (< 1.1.x), no changes made"
+        log "OpenSSL version is $openssl_version (< 1.1.x), no changes made to openssl.py"
     fi
 else
-    log "Warning: OpenSSL not found, skipping OpenSSL modifications"
+    log "Warning: OpenSSL not found, skipping OpenSSL modifications for Shadowsocks."
 fi
 
 log "### Fix code section completed ###"
@@ -157,15 +201,17 @@ EOF
 log "Setting TCP congestion control to BBR"
 modprobe tcp_bbr || log "Warning: Failed to load tcp_bbr module"
 sysctl -w net.ipv4.tcp_congestion_control=bbr || log "Error: Failed to set BBR as TCP congestion control"
-echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf || log "Warning: Failed to persist BBR setting"
+echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf || log "Warning: Failed to persist BBR setting to /etc/sysctl.conf"
 sysctl -p # 加载 sysctl 配置
 
 # 启动 Shadowsocks 服务
+log "Starting Shadowsocks server..."
 ssserver -c /etc/shadowsocks.json -d start
 sleep 2
 testing=$(head -2 /var/log/shadowsocks.log)
 
 # 发送 Slack 通知
+log "Sending Slack notification..."
 generate_slack_post_data()
 {
 cat << EOF
@@ -177,12 +223,13 @@ cat << EOF
 }
 EOF
 }
+# Removed 'exit' at the end of curl commands.
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_slack_post_data)" -X POST "${SLACK_WEBHOOK_URL}"
 echo # 确保日志消息换行
 
 # 发送 DingTalk 通知 (如果 DINGTALK_WEBHOOK_URL 已设置)
 if [[ -n "$DINGTALK_WEBHOOK_URL" ]]; then
-    log "send a message to dingtalk"
+    log "Sending DingTalk notification..."
     generate_dingtalk_post_data()
     {
     local message_content="ss-notice: ${testing}" # 确保消息内容中包含关键词
@@ -200,28 +247,18 @@ EOF
 fi
 
 # ====================================================================
-# 新增部分：重启服务以应用库更新
+# 修正部分：重启服务以应用库更新 (主要针对非 SSH 服务)
 # ====================================================================
 
-log "Checking for services that require restarting due to library updates..."
+log "Checking for other services that require restarting due to library updates..."
 
-# 优先重启 sshd
-if command_exists systemctl; then
-    log "Attempting to restart sshd service first..."
-    systemctl restart sshd &>/dev/null || log "Warning: Failed to restart sshd service immediately."
-    # 注意：这里我们立即尝试重启 sshd，但不对其失败进行硬性退出，
-    # 因为在 cloud-init 脚本中，如果当前会话因此断开，脚本会继续执行。
-    # 如果 sshd 真的无法启动，后续的 ssh 尝试仍然会失败。
-    # 这里使用 &>/dev/null 隐藏输出，因为在 cloud-init 中这些输出可能被视为错误。
-fi
-
-# 识别其他需要重启的服务并尝试重启它们
+# 'yum-utils' (or 'dnf-utils') for 'needs-restarting' should be installed by now
 if command_exists needs-restarting; then
-    # 排除ssh服务本身，因为我们已经处理过
-    services_to_restart=$(needs-restarting -s | grep -v "sshd")
+    # 排除sshd服务，因为它在脚本开始时已经被重点处理过
+    services_to_restart=$(needs-restarting -s | grep -v "sshd" || true) # '|| true' prevents exiting if grep finds nothing
 
     if [[ -n "$services_to_restart" ]]; then
-        log "Found services requiring restart: $services_to_restart"
+        log "Found other services requiring restart: $services_to_restart"
         for service in $services_to_restart; do
             if systemctl is-active --quiet "$service"; then
                 log "Restarting service: $service"
@@ -231,20 +268,19 @@ if command_exists needs-restarting; then
             fi
         done
     else
-        log "No other services requiring restart found."
+        log "No other services explicitly requiring restart found."
     fi
 else
-    log "Warning: 'needs-restarting' not found. Cannot automatically identify and restart services."
-    log "Please ensure all necessary services (especially sshd) are restarted manually if this is a concern."
+    log "Warning: 'needs-restarting' not found. Cannot automatically identify and restart other services."
+    log "Please ensure all necessary services are restarted manually if this is a concern."
 fi
 
 # ====================================================================
-# 新增部分结束
+# 修正部分结束
 # ====================================================================
 
-
 # 创建测试文件
-log "Creating a 150MB test file for disk&network I/O testing"
+log "Creating a 150MB test file for disk & network I/O testing"
 dd if=/dev/zero of=/root/loopdev bs=1M count=150 2>/dev/null || log "Warning: Failed to create test file"
 
 log "Script completed successfully"
