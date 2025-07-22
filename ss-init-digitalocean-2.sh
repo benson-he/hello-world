@@ -41,47 +41,11 @@ else
     log "Warning: systemctl not found, skipping firewall stop"
 fi
 
-# ====================================================================
-# 修正部分：确保 SSH 正常工作
-# ====================================================================
-
-log "Ensuring OpenSSH server is correctly installed and configured..."
-
-if command_exists dnf; then
-    # 清理dnf缓存
-    dnf clean all || log "Warning: Failed to clean dnf cache"
-
-    # 尝试重新安装 openssh-server 和 openssh-clients
-    # 如果 dnf reinstall 失败 (例如因为 'from anaconda' 导致的包不可用), 则尝试 remove 再 install
-    if ! dnf reinstall -y openssh-server openssh-clients; then
-        log "dnf reinstall failed, attempting to remove and then install openssh-server and openssh-clients..."
-        log "!!! WARNING: SSH access may be temporarily interrupted during this process. !!!"
-        dnf remove -y openssh-server openssh-clients || { log "Error: Failed to remove OpenSSH packages."; exit 1; }
-        dnf install -y openssh-server openssh-clients || { log "Error: Failed to install OpenSSH packages."; exit 1; }
-        log "OpenSSH packages reinstalled."
-    else
-        log "OpenSSH packages reinstalled successfully with dnf reinstall."
-    fi
-
-    # 确保 sshd 服务启动
-    systemctl enable sshd --now || log "Warning: Failed to enable and start sshd service."
-    log "sshd service status after initial setup:"
-    systemctl status sshd || true # true ensures script doesn't exit if status command itself fails
-    sshd -t || log "Warning: sshd configuration test failed after reinstallation."
-
-else
-    log "Warning: No dnf found. OpenSSH check and reinstallation skipped."
-fi
-
-log "### OpenSSH setup completed ###"
-
-# ====================================================================
-# 其他部分继续
-# ====================================================================
-
 # 安装 Python 和 Shadowsocks
 log "Installing python3, pip and other utilities..."
 if command_exists dnf; then
+    # 清理dnf缓存
+    dnf clean all || log "Warning: Failed to clean dnf cache"
     # 安装必要的包，包括 openssl-libs (dnf会自动处理openssl依赖)
     # yum-utils 确保在此处安装，以便后续的 needs-restarting 使用
     dnf install -y python3 python3-pip openssl openssl-libs yum-utils || \
@@ -223,7 +187,6 @@ cat << EOF
 }
 EOF
 }
-# Removed 'exit' at the end of curl commands.
 curl -s -i -H "Accept: application/json" -H "Content-type: application/json" --data "$(generate_slack_post_data)" -X POST "${SLACK_WEBHOOK_URL}"
 echo # 确保日志消息换行
 
@@ -247,6 +210,41 @@ EOF
 fi
 
 # ====================================================================
+# 新增部分：确保 SSH 正常工作 (移动到此处)
+# ====================================================================
+
+log "Ensuring OpenSSH server is correctly installed and configured..."
+
+if command_exists dnf; then
+    # 尝试重新安装 openssh-server 和 openssh-clients
+    # 如果 dnf reinstall 失败 (例如因为 'from anaconda' 导致的包不可用), 则尝试 remove 再 install
+    if ! dnf reinstall -y openssh-server openssh-clients; then
+        log "dnf reinstall failed, attempting to remove and then install openssh-server and openssh-clients..."
+        log "!!! WARNING: SSH access may be temporarily interrupted during this process. !!!"
+        dnf remove -y openssh-server openssh-clients || { log "Error: Failed to remove OpenSSH packages."; exit 1; }
+        dnf install -y openssh-server openssh-clients || { log "Error: Failed to install OpenSSH packages."; exit 1; }
+        log "OpenSSH packages reinstalled."
+    else
+        log "OpenSSH packages reinstalled successfully with dnf reinstall."
+    fi
+
+    # 确保 sshd 服务启动
+    systemctl enable sshd --now || log "Warning: Failed to enable and start sshd service."
+    log "sshd service status after initial setup:"
+    systemctl status sshd || true # true ensures script doesn't exit if status command itself fails
+    sshd -t || log "Warning: sshd configuration test failed after reinstallation."
+
+else
+    log "Warning: No dnf found. OpenSSH check and reinstallation skipped."
+fi
+
+log "### OpenSSH setup completed ###"
+
+# ====================================================================
+# 新增部分结束
+# ====================================================================
+
+# ====================================================================
 # 修正部分：重启服务以应用库更新 (主要针对非 SSH 服务)
 # ====================================================================
 
@@ -264,7 +262,7 @@ if command_exists needs-restarting; then
                 log "Restarting service: $service"
                 systemctl restart "$service" &>/dev/null || log "Warning: Failed to restart $service."
             else
-                log "Service $service is not active, skipping restart."
+                log "Service "$service" is not active, skipping restart."
             fi
         done
     else
