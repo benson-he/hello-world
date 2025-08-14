@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-log() { echo "[$(date '+%F %T')] $1"; }
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
 
 for cmd in curl tar file systemctl; do
   command -v $cmd >/dev/null 2>&1 || { echo "$cmd not found."; exit 1; }
