@@ -172,7 +172,7 @@ sysctl -p # 加载 sysctl 配置
 log "Starting Shadowsocks server..."
 ssserver -c /etc/shadowsocks.json -d start
 sleep 2
-testing=$(head -2 /var/log/shadowsocks.log)
+testing=$(grep -v '^$' /var/log/shadowsocks.log | head -n 1)
 
 # 发送 Slack 通知
 log "Sending Slack notification..."
