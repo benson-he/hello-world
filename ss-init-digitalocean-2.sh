@@ -25,6 +25,10 @@ if [[ -z "$SSPASSWD" ]]; then
     log "Error: SSPASSWD is not set"
     exit 1
 fi
+if [[ -z "$SSPORT" ]]; then
+    log "Error: SSPORT is not set"
+    exit 1
+fi
 
 # 设置时区（可选）
 if command_exists timedatectl; then
@@ -151,7 +155,7 @@ fi
 cat << EOF > /etc/shadowsocks.json
 {
     "server": "$server_ip",
-    "server_port": 9094,
+    "server_port": ${SSPORT},
     "local_address": "127.0.0.1",
     "local_port": 1080,
     "password": "$SSPASSWD",
